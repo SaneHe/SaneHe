@@ -30,7 +30,7 @@ Here are some ideas to get you started:
 - 👯 I hope to cooperate in a new job
 - 🤔 I’m looking for help with cooking
 <!-- - 💬 Ask me about ... -->
-- 📫 How to reach me: sane.stays@gmail.com
+- 📫 How to reach me: email
 - 😄 Pronouns: school boy
 - ⚡ Fun fact: I’m a school boy
 
