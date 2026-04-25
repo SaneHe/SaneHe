@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Profile Game | Sane</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d1117;
+            color: #39d353;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            border: 2px solid #39d353;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(57, 211, 83, 0.3);
+        }
+
+        canvas {
+            display: block;
+            background: #0d1117;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 14px;
+            text-shadow: 0 0 10px #39d353;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #8b949e;
+            text-align: center;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            background: rgba(13, 17, 23, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #39d353;
+        }
+
+        #gameOver h2 {
+            color: #ff7b72;
+            margin-bottom: 10px;
+        }
+
+        #gameOver button {
+            margin-top: 15px;
+            padding: 8px 20px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        #gameOver button:hover {
+            background: #2ea043;
+        }
+
+        .exploding {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-5px, -5px); }
+            50% { transform: translate(5px, 5px); }
+            75% { transform: translate(-5px, 5px); }
+        }
+
+        #languageWall {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        .lang-particle {
+            position: absolute;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            opacity: 0.8;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .matrix-rain {
+            position: absolute;
+            font-family: 'Courier New', monospace;
+            opacity: 0.6;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-shadow: 0 0 20px #39d353;
+        }
+
+        #specialAppleHint {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 12px;
+            color: #ff7b72;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐍 SANE'S PROFILE SNAKE 🐍</h1>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div id="ui">
+            <div>SCORE: <span id="score">0</span></div>
+            <div>LANG: <span id="langCount">0</span>/42</div>
+        </div>
+        <div id="instructions">
+            Use ← ↑ ↓ → or WASD to move<br>
+            Eat apples to grow • Find the special apple!
+        </div>
+        <div id="specialAppleHint">🍎 SPECIAL APPLE APPEARS!</div>
+        <div id="gameOver">
+            <h2 id="endTitle">GAME OVER</h2>
+            <p id="endMessage">You collected <span id="finalScore">0</span> languages</p>
+            <button onclick="resetGame()">PLAY AGAIN</button>
+        </div>
+        <div id="languageWall"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverDiv = document.getElementById('gameOver');
+        const endTitle = document.getElementById('endTitle');
+        const endMessage = document.getElementById('endMessage');
+        const scoreSpan = document.getElementById('score');
+        const langCountSpan = document.getElementById('langCount');
+        const finalScoreSpan = document.getElementById('finalScore');
+        const languageWall = document.getElementById('languageWall');
+        const specialAppleHint = document.getElementById('specialAppleHint');
+
+        const GRID_SIZE = 15;
+        const COLS = canvas.width / GRID_SIZE;
+        const ROWS = canvas.height / GRID_SIZE;
+
+        // 技术栈配置 - 42个标签 (编程语言 + 技术工具 + AI/LLM + 运维/可观测 + 新兴技术)
+        const LANGUAGES = [
+            // 编程语言 (10个)
+            { name: 'Go', color: '#4ec9ff' },
+            { name: 'PHP', color: '#7c7cff' },
+            { name: 'JavaScript', color: '#fff700' },
+            { name: 'HTML', color: '#ff6b6b' },
+            { name: 'Python', color: '#66b3ff' },
+            { name: 'Swift', color: '#ffb84d' },
+            { name: 'TypeScript', color: '#4da6ff' },
+            { name: 'Vue', color: '#4dff88' },
+            { name: 'Shell', color: '#b3ff66' },
+            { name: 'CSS', color: '#c299ff' },
+            // 容器/云原生/后端 (6个)
+            { name: 'Docker', color: '#4db8ff' },
+            { name: 'K8s', color: '#5c8aff' },
+            { name: 'Node', color: '#4eff4e' },
+            { name: 'Rust', color: '#ff7043' },
+            { name: 'gRPC', color: '#244c5a' },
+            { name: 'Nginx', color: '#009639' },
+            // 数据库/消息队列 (6个)
+            { name: 'MySQL', color: '#5cadff' },
+            { name: 'Redis', color: '#ff5555' },
+            { name: 'PostgreSQL', color: '#336791' },
+            { name: 'MongoDB', color: '#00ed64' },
+            { name: 'Kafka', color: '#ffaa44' },
+            { name: 'RabbitMQ', color: '#ff6600' },
+            // 前端框架/工具 (5个)
+            { name: 'React', color: '#61dafb' },
+            { name: 'Vite', color: '#646cff' },
+            { name: 'Tailwind', color: '#38bdf8' },
+            { name: 'GraphQL', color: '#e535ab' },
+            { name: 'Bun', color: '#fbf0df' },
+            // AI/LLM (7个)
+            { name: 'Claude', color: '#cc785c' },
+            { name: 'OpenAI', color: '#74aa9c' },
+            { name: 'Codex', color: '#c9d1d9' },
+            { name: 'AI', color: '#ff4ecd' },
+            { name: 'SKILLS', color: '#f59e0b' },
+            { name: 'MCP', color: '#f24e1e' },
+            { name: 'Ollama', color: '#fff' },
+            // 运维/可观测 (4个)
+            { name: 'Prometheus', color: '#e6522c' },
+            { name: 'Grafana', color: '#f46800' },
+            { name: 'Terraform', color: '#7b42bc' },
+            { name: 'Elasticsearch', color: '#f0a000' },
+            // 新兴/其他 (4个)
+            { name: 'Zig', color: '#f7a41d' },
+            { name: 'NATS', color: '#27aa00' },
+            { name: 'Nix', color: '#5277c3' },
+            { name: 'shadcn', color: '#fff' }
+        ];
+
+        let snake = [];
+        let direction = { x: 1, y: 0 };
+        let nextDirection = { x: 1, y: 0 };
+        let apple = null;
+        let specialApple = null;
+        let score = 0;
+        const INITIAL_MOVE_INTERVAL = 160;
+        const MIN_MOVE_INTERVAL = 95;
+        const SPEED_STEP = 4;
+
+        let animationFrameId = null;
+        let specialAppleTimeoutId = null;
+        let collectedLangs = new Set();
+        let isExploding = false;
+        let particles = [];
+        let matrixRain = [];
+        let moveInterval = INITIAL_MOVE_INTERVAL;
+        let lastFrameTime = 0;
+        let accumulatedTime = 0;
+        let previousSnake = [];
+
+        // 初始化游戏
+        function init() {
+            snake = [
+                { x: 5, y: 10 },
+                { x: 4, y: 10 },
+                { x: 3, y: 10 },
+                { x: 2, y: 10 }
+            ];
+            direction = { x: 1, y: 0 };
+            nextDirection = { x: 1, y: 0 };
+            score = 0;
+            collectedLangs.clear();
+            isExploding = false;
+            particles = [];
+            matrixRain = [];
+            moveInterval = INITIAL_MOVE_INTERVAL;
+            lastFrameTime = 0;
+            accumulatedTime = 0;
+            previousSnake = cloneSnake(snake);
+
+            apple = spawnApple();
+            specialApple = null;
+
+            gameOverDiv.style.display = 'none';
+            languageWall.style.display = 'none';
+            languageWall.innerHTML = '';
+            specialAppleHint.style.opacity = '0';
+
+            updateUI();
+            draw(0);
+
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = requestAnimationFrame(gameLoop);
+            if (specialAppleTimeoutId) clearTimeout(specialAppleTimeoutId);
+
+            // 5-15秒后随机生成特殊苹果
+            const randomDelay = 5000 + Math.random() * 10000;
+            specialAppleTimeoutId = setTimeout(() => {
+                if (!isExploding) {
+                    specialApple = spawnApple(true);
+                    specialAppleHint.style.opacity = '1';
+                }
+            }, randomDelay);
+        }
+
+        function cloneSnake(source) {
+            return source.map(segment => ({ ...segment }));
+        }
+
+        function lerp(start, end, progress) {
+            return start + (end - start) * progress;
+        }
+
+        function gameLoop(timestamp) {
+            if (isExploding) return;
+
+            if (!lastFrameTime) {
+                lastFrameTime = timestamp;
+            }
+
+            const delta = Math.min(timestamp - lastFrameTime, moveInterval);
+            lastFrameTime = timestamp;
+            accumulatedTime += delta;
+
+            while (accumulatedTime >= moveInterval && !isExploding) {
+                stepGame();
+                accumulatedTime -= moveInterval;
+            }
+
+            const progress = isExploding ? 0 : Math.min(accumulatedTime / moveInterval, 1);
+            draw(progress);
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // 生成苹果
+        function spawnApple(isSpecial = false) {
+            let pos;
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * (COLS - 2)) + 1,
+                    y: Math.floor(Math.random() * (ROWS - 2)) + 1,
+                    isSpecial: isSpecial
+                };
+            } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+            return pos;
+        }
+
+        // 更新游戏逻辑
+        function stepGame() {
+            if (isExploding) return;
+
+            previousSnake = cloneSnake(snake);
+            direction = nextDirection;
+
+            const head = {
+                x: snake[0].x + direction.x,
+                y: snake[0].y + direction.y
+            };
+
+            // 撞墙检测
+            if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+                endGame(false);
+                return;
+            }
+
+            // 撞自己检测
+            if (snake.some(s => s.x === head.x && s.y === head.y)) {
+                endGame(false);
+                return;
+            }
+
+            snake.unshift(head);
+
+            // 吃普通苹果
+            if (apple && head.x === apple.x && head.y === apple.y) {
+                score += 10;
+                apple = spawnApple();
+                moveInterval = Math.max(MIN_MOVE_INTERVAL, moveInterval - SPEED_STEP);
+            }
+            // 吃特殊苹果 - 触发爆炸
+            else if (specialApple && head.x === specialApple.x && head.y === specialApple.y) {
+                triggerExplosion();
+                return;
+            } else {
+                snake.pop();
+            }
+
+            updateUI();
+        }
+
+        // 绘制游戏
+        function draw(progress = 0) {
+            // 清空画布
+            ctx.fillStyle = '#0d1117';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格（微弱）
+            ctx.strokeStyle = 'rgba(57, 211, 83, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID_SIZE, 0);
+                ctx.lineTo(i * GRID_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * GRID_SIZE);
+                ctx.lineTo(canvas.width, i * GRID_SIZE);
+                ctx.stroke();
+            }
+
+            // 绘制蛇 - 头大头小的椭圆蛇身
+            const renderedSnake = snake.map((segment, index) => {
+                const fromSegment = previousSnake[Math.min(index, previousSnake.length - 1)] || segment;
+                return {
+                    x: lerp(fromSegment.x, segment.x, progress),
+                    y: lerp(fromSegment.y, segment.y, progress)
+                };
+            });
+
+            renderedSnake.forEach((segment, index) => {
+                const x = segment.x * GRID_SIZE;
+                const y = segment.y * GRID_SIZE;
+                const centerX = x + GRID_SIZE / 2;
+                const centerY = y + GRID_SIZE / 2;
+
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#39d353';
+
+                if (index === 0) {
+                    // 蛇头 - 椭圆形，带眼睛
+                    ctx.fillStyle = '#39d353';
+                    ctx.beginPath();
+                    ctx.ellipse(centerX, centerY, GRID_SIZE * 0.7, GRID_SIZE * 0.6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 眼睛位置根据方向调整
+                    let eyeOffsetX = 0, eyeOffsetY = 0;
+                    if (direction.x === 1) { eyeOffsetX = 3; eyeOffsetY = 0; }
+                    else if (direction.x === -1) { eyeOffsetX = -3; eyeOffsetY = 0; }
+                    else if (direction.y === -1) { eyeOffsetX = 0; eyeOffsetY = -3; }
+                    else if (direction.y === 1) { eyeOffsetX = 0; eyeOffsetY = 3; }
+
+                    ctx.fillStyle = '#0d1117';
+                    ctx.shadowBlur = 0;
+
+                    // 左眼
+                    ctx.beginPath();
+                    ctx.ellipse(centerX - 2 + eyeOffsetX * 0.5, centerY - 3 + eyeOffsetY * 0.5, 2, 2.5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 右眼
+                    ctx.beginPath();
+                    ctx.ellipse(centerX + 2 + eyeOffsetX * 0.5, centerY - 3 + eyeOffsetY * 0.5, 2, 2.5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 眼睛高光
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(centerX - 1.5 + eyeOffsetX * 0.5, centerY - 3.5 + eyeOffsetY * 0.5, 1, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(centerX + 2.5 + eyeOffsetX * 0.5, centerY - 3.5 + eyeOffsetY * 0.5, 1, 0, Math.PI * 2);
+                    ctx.fill();
+
+                } else if (index === snake.length - 1) {
+                    // 蛇尾 - 尖三角形
+                    const prev = renderedSnake[index - 1];
+                    const angle = Math.atan2(segment.y - prev.y, segment.x - prev.x);
+
+                    ctx.fillStyle = '#0a3d1f';
+                    ctx.beginPath();
+                    ctx.moveTo(centerX + Math.cos(angle) * 6, centerY + Math.sin(angle) * 6);
+                    ctx.lineTo(centerX + Math.cos(angle + 2.5) * 4, centerY + Math.sin(angle + 2.5) * 4);
+                    ctx.lineTo(centerX + Math.cos(angle - 2.5) * 4, centerY + Math.sin(angle - 2.5) * 4);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // 蛇身 - 椭圆，从前往后逐渐变小
+                    const sizeRatio = 1 - (index / snake.length) * 0.4; // 0.6 到 1 之间
+                    const rx = (GRID_SIZE / 2 - 1) * sizeRatio;
+                    const ry = (GRID_SIZE / 2 - 2) * sizeRatio;
+
+                    // 颜色渐变
+                    const greenValue = Math.floor(160 + (211 - 160) * (1 - index / snake.length));
+                    ctx.fillStyle = `rgb(57, ${greenValue}, 83)`;
+
+                    ctx.beginPath();
+                    ctx.ellipse(centerX, centerY, rx, ry, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.shadowBlur = 0;
+            });
+
+            // 绘制普通苹果
+            if (apple) {
+                ctx.fillStyle = '#ff7b72';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ff7b72';
+                ctx.beginPath();
+                ctx.arc(
+                    apple.x * GRID_SIZE + GRID_SIZE / 2,
+                    apple.y * GRID_SIZE + GRID_SIZE / 2,
+                    GRID_SIZE / 2 - 2,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // 绘制特殊苹果
+            if (specialApple) {
+                const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+                ctx.fillStyle = `rgba(255, 123, 114, ${pulse})`;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ff7b72';
+
+                // 外圈
+                ctx.beginPath();
+                ctx.arc(
+                    specialApple.x * GRID_SIZE + GRID_SIZE / 2,
+                    specialApple.y * GRID_SIZE + GRID_SIZE / 2,
+                    GRID_SIZE / 2,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+
+                // 内圈
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(
+                    specialApple.x * GRID_SIZE + GRID_SIZE / 2,
+                    specialApple.y * GRID_SIZE + GRID_SIZE / 2,
+                    GRID_SIZE / 4,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // 触发爆炸效果
+        function triggerExplosion() {
+            isExploding = true;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            if (specialAppleTimeoutId) clearTimeout(specialAppleTimeoutId);
+            specialAppleTimeoutId = null;
+
+            // 添加抖动效果
+            canvas.classList.add('exploding');
+
+            // 爆炸动画
+            let frame = 0;
+            const explosionInterval = setInterval(() => {
+                ctx.fillStyle = `rgba(57, 211, 83, ${0.1 + frame * 0.05})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 爆炸光圈
+                ctx.strokeStyle = '#39d353';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = '#39d353';
+                ctx.beginPath();
+                ctx.arc(
+                    snake[0].x * GRID_SIZE + GRID_SIZE / 2,
+                    snake[0].y * GRID_SIZE + GRID_SIZE / 2,
+                    frame * 15,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                frame++;
+                if (frame > 30) {
+                    clearInterval(explosionInterval);
+                    canvas.classList.remove('exploding');
+                    createLanguageWall();
+                }
+            }, 30);
+        }
+
+        // 创建语言墙
+        function createLanguageWall() {
+            languageWall.style.display = 'block';
+            canvas.style.display = 'none';
+
+            // 爆炸散开的粒子
+            LANGUAGES.forEach((lang, i) => {
+                const particle = document.createElement('div');
+                particle.className = 'lang-particle';
+                particle.textContent = lang.name;
+                particle.style.color = lang.color;
+                particle.style.left = '50%';
+                particle.style.top = '50%';
+                particle.style.fontSize = '20px';
+
+                const angle = (Math.PI * 2 * i) / LANGUAGES.length;
+                const distance = 150 + Math.random() * 50;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+
+                particle.style.transition = 'all 1s ease-out';
+                languageWall.appendChild(particle);
+
+                setTimeout(() => {
+                    particle.style.transform = `translate(${tx}px, ${ty}px)`;
+                    particle.style.opacity = '0.8';
+                }, 50);
+
+                // 2秒后开始代码雨
+                setTimeout(() => {
+                    particle.style.transition = 'all 2s ease-in';
+                    particle.style.transform = `translate(${tx}px, ${400 + Math.random() * 100}px)`;
+                    particle.style.opacity = '0.3';
+                }, 1000);
+            });
+
+            // 创建代码雨效果
+            setTimeout(() => {
+                createMatrixRain();
+            }, 2000);
+
+            // 3秒后显示结束界面
+            setTimeout(() => {
+                endTitle.textContent = 'PROFILE UNLOCKED!';
+                endTitle.style.color = '#39d353';
+                endMessage.innerHTML = `
+                    Discovered ${LANGUAGES.length} languages:<br>
+                    <span style="color: #8b949e; font-size: 12px;">
+                        ${LANGUAGES.map(l => `<span style="color:${l.color}">${l.name}</span>`).join(' • ')}
+                    </span>
+                `;
+                gameOverDiv.style.display = 'block';
+            }, 4000);
+        }
+
+        // 矩阵代码雨
+        function createMatrixRain() {
+            const chars = LANGUAGES.map(l => l.name);
+            const colors = LANGUAGES.map(l => l.color);
+
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const drop = document.createElement('div');
+                    drop.className = 'matrix-rain';
+                    drop.textContent = chars[Math.floor(Math.random() * chars.length)];
+                    drop.style.color = colors[Math.floor(Math.random() * colors.length)];
+                    drop.style.left = Math.random() * 100 + '%';
+                    drop.style.top = '-20px';
+                    drop.style.fontSize = (12 + Math.random() * 8) + 'px';
+                    languageWall.appendChild(drop);
+
+                    let y = -20;
+                    const speed = 1 + Math.random() * 1.5; // 减慢速度
+                    const fall = setInterval(() => {
+                        y += speed;
+                        drop.style.top = y + 'px';
+                        drop.style.opacity = 1 - (y / 450);
+
+                        if (y > 400) {
+                            clearInterval(fall);
+                            drop.remove();
+                        }
+                    }, 30); // 增加间隔时间
+                }, i * 150); // 增加生成间隔
+            }
+        }
+
+        // 游戏结束
+        function endGame(won) {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            if (specialAppleTimeoutId) clearTimeout(specialAppleTimeoutId);
+            specialAppleTimeoutId = null;
+            endTitle.textContent = won ? 'YOU WIN!' : 'GAME OVER';
+            endTitle.style.color = won ? '#39d353' : '#ff7b72';
+            endMessage.textContent = `Final Score: ${score}`;
+            finalScoreSpan.textContent = score;
+            gameOverDiv.style.display = 'block';
+        }
+
+        // 重置游戏
+        function resetGame() {
+            languageWall.innerHTML = '';
+            languageWall.style.display = 'none';
+            canvas.style.display = 'block';
+            init();
+        }
+
+        // 更新UI
+        function updateUI() {
+            scoreSpan.textContent = score;
+            langCountSpan.textContent = collectedLangs.size;
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (isExploding) return;
+
+            const key = e.key.toLowerCase();
+            if ((key === 'arrowup' || key === 'w') && direction.y === 0) {
+                nextDirection = { x: 0, y: -1 };
+            } else if ((key === 'arrowdown' || key === 's') && direction.y === 0) {
+                nextDirection = { x: 0, y: 1 };
+            } else if ((key === 'arrowleft' || key === 'a') && direction.x === 0) {
+                nextDirection = { x: -1, y: 0 };
+            } else if ((key === 'arrowright' || key === 'd') && direction.x === 0) {
+                nextDirection = { x: 1, y: 0 };
+            }
+        });
+
+        // 启动游戏
+        init();
+    </script>
+</body>
+</html>
